@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-aks-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodejs-aks-demo
+  template:
+    metadata:
+      labels:
+        app: nodejs-aks-demo
+    spec:
+      containers:
+      - name: nodejs-aks-demo
+        image: demoregistry.azurecr.io/nodejs-aks-demo:v1
+        ports:
+        - containerPort: 3000
