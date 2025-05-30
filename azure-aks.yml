@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  REGISTRY: demoregistry.azurecr.io
+  REGISTRY: demoregistryaks1.azurecr.io
   IMAGE_NAME: nodejs-aks-demo
   RESOURCE_GROUP: vnet-aks-demo-rg
   AKS_CLUSTER: demo-aks
