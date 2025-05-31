@@ -1,44 +1,60 @@
 name: Build and Deploy to AKS
 
+# Trigger this workflow on pushes to the main branch
 on:
   push:
     branches:
       - main
 
+# Define environment variables used throughout the workflow
+env:
+  ACR_NAME: demoregistryaks1                    # Your Azure Container Registry name
+  ACR_LOGIN_SERVER: demoregistryaks1.azurecr.io  # Login server for your ACR
+  IMAGE_NAME: my-node-app                        # Docker image name
+  RESOURCE_GROUP: vnet-aks-demo-rg               # Azure resource group containing your AKS cluster
+  CLUSTER_NAME: demo-aks-public2                  # Correct AKS cluster name
+  NAMESPACE: default                              # Kubernetes namespace (default)
+
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest                        # Use latest Ubuntu runner
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      # 1. Checkout your source code
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Log in to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # 2. Login to Azure using the service principal stored in secrets.AZURE_CREDENTIALS
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      # 3. Login to Azure Container Registry (ACR)
+      - name: Log in to ACR
+        run: az acr login --name $ACR_NAME
 
-    - name: Log in to Azure Container Registry
-      uses: docker/login-action@v2
-      with:
-        registry: demoregistryaks1.azurecr.io
-        username: demoregistryaks1
-        password: ${{ secrets.ACR_PASSWORD }}
+      # 4. Build and push Docker image to ACR
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .                       # Docker build context (repo root)
+          push: true                      # Push image after build
+          tags: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest  # Image tag
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: true
-        tags: demoregistryaks1.azurecr.io/my-node-app:latest
+      # 5. Debug: print variables and list AKS clusters (to verify cluster existence)
+      - name: Debug AKS info
+        run: |
+          echo "Resource Group: $RESOURCE_GROUP"
+          echo "Cluster Name: $CLUSTER_NAME"
+          az aks list --resource-group $RESOURCE_GROUP --output table
 
-    - name: Set AKS credentials
-      run: az aks get-credentials --resource-group vnet-aks-demo-rg --name myAKSCluster
+      # 6. Get AKS credentials to configure kubectl to talk to your cluster
+      - name: Set AKS credentials
+        run: az aks get-credentials --resource-group $RESOURCE_GROUP --name $CLUSTER_NAME --overwrite-existing
 
-    - name: Deploy to AKS
-      run: |
-        kubectl apply -f deployment.yaml
-        kubectl apply -f service.yaml
+      # 7. Deploy Kubernetes manifests to AKS
+      - name: Deploy to AKS
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
