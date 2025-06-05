@@ -25,20 +25,17 @@ jobs:
         docker build -t ${{ secrets.AZURE_CONTAINER_REGISTRY }}/my-node-app:latest .
         docker push ${{ secrets.AZURE_CONTAINER_REGISTRY }}/my-node-app:latest
 
-    - name: Set up kubectl
+    - name: Install kubectl
       uses: azure/setup-kubectl@v3
-      with:
-        version: 'latest'
 
-    - name: Decode and Set KUBECONFIG
+    - name: Decode and Set kubeconfig
       run: |
         echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > kubeconfig
-        export KUBECONFIG=$PWD/kubeconfig
-
-        # Optional: validate connectivity
-        kubectl --kubeconfig=$PWD/kubeconfig cluster-info
+        export KUBECONFIG=kubeconfig
+        kubectl version --short
 
     - name: Deploy to AKS
       run: |
-        kubectl --kubeconfig=$PWD/kubeconfig apply -f k8s/deployment.yaml
-        kubectl --kubeconfig=$PWD/kubeconfig apply -f k8s/service.yaml
+        export KUBECONFIG=kubeconfig
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
