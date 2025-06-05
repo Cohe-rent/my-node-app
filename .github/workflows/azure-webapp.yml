@@ -1,60 +1,39 @@
 name: Build and Deploy to AKS
 
-# Trigger this workflow on pushes to the main branch
 on:
   push:
     branches:
       - main
 
-# Define environment variables used throughout the workflow
-env:
-  ACR_NAME: demoregistryaks1                    # Your Azure Container Registry name
-  ACR_LOGIN_SERVER: demoregistryaks1.azurecr.io  # Login server for your ACR
-  IMAGE_NAME: my-node-app                        # Docker image name
-  RESOURCE_GROUP: vnet-aks-demo-rg               # Azure resource group containing your AKS cluster
-  CLUSTER_NAME: demo-aks-public2                  # Correct AKS cluster name
-  NAMESPACE: default                              # Kubernetes namespace (default)
-
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest                        # Use latest Ubuntu runner
+    runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout your source code
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      # 2. Login to Azure using the service principal stored in secrets.AZURE_CREDENTIALS
-      - name: Log in to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Log in to Azure Container Registry (ACR)
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
 
-      # 3. Login to Azure Container Registry (ACR)
-      - name: Log in to ACR
-        run: az acr login --name $ACR_NAME
+    - name: Build and Push Docker Image to ACR
+      run: |
+        docker build -t ${{ secrets.AZURE_CONTAINER_REGISTRY }}/my-node-app:latest .
+        docker push ${{ secrets.AZURE_CONTAINER_REGISTRY }}/my-node-app:latest
 
-      # 4. Build and push Docker image to ACR
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .                       # Docker build context (repo root)
-          push: true                      # Push image after build
-          tags: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest  # Image tag
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
 
-      # 5. Debug: print variables and list AKS clusters (to verify cluster existence)
-      - name: Debug AKS info
-        run: |
-          echo "Resource Group: $RESOURCE_GROUP"
-          echo "Cluster Name: $CLUSTER_NAME"
-          az aks list --resource-group $RESOURCE_GROUP --output table
+    - name: Configure KUBECONFIG from Secret
+      run: |
+        echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
 
-      # 6. Get AKS credentials to configure kubectl to talk to your cluster
-      - name: Set AKS credentials
-        run: az aks get-credentials --resource-group $RESOURCE_GROUP --name $CLUSTER_NAME --overwrite-existing
-
-      # 7. Deploy Kubernetes manifests to AKS
-      - name: Deploy to AKS
-        run: |
-          kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/service.yaml
+    - name: Deploy to AKS using kubectl
+      run: |
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
